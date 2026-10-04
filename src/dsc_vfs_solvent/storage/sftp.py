@@ -41,7 +41,7 @@ class SFTPDriver(StorageDriver):
         except (paramiko.SSHException, OSError):
             return False
 
-    def _store(self, message: bytes) -> str:
+    def _do_store(self, message: bytes) -> str:
         try:
             remote_id = self._new_remote_id()
             with self.connection.open(remote_id, "wb") as fh:
@@ -50,14 +50,14 @@ class SFTPDriver(StorageDriver):
         except (paramiko.SSHException, OSError) as exc:
             raise StorageError(f"SFTP: ошибка сохранения: {exc}") from exc
 
-    def _fetch(self, remote_id: str) -> bytes:
+    def _do_fetch(self, remote_id: str) -> bytes:
         try:
             with self.connection.open(remote_id, "rb") as fh:
                 return fh.read()
         except (paramiko.SSHException, OSError) as exc:
             raise StorageError(f"SFTP: ошибка чтения: {exc}") from exc
 
-    def _purge(self, remote_id: str) -> bool:
+    def _do_purge(self, remote_id: str) -> bool:
         try:
             self.connection.remove(remote_id)
             return True

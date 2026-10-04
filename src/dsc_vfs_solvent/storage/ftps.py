@@ -41,7 +41,7 @@ class FTPSDriver(StorageDriver):
         except (ftplib.all_errors, OSError):
             return False
 
-    def _store(self, message: bytes) -> str:
+    def _do_store(self, message: bytes) -> str:
         try:
             fh = io.BytesIO(message)
             # STOU — сохранить с уникальным именем; сервер возвращает имя файла.
@@ -51,7 +51,7 @@ class FTPSDriver(StorageDriver):
         except (ftplib.all_errors, OSError) as exc:
             raise StorageError(f"FTPS: ошибка сохранения: {exc}") from exc
 
-    def _fetch(self, remote_id: str) -> bytes:
+    def _do_fetch(self, remote_id: str) -> bytes:
         try:
             fh = io.BytesIO()
             self.connection.retrbinary(
@@ -61,7 +61,7 @@ class FTPSDriver(StorageDriver):
         except (ftplib.all_errors, OSError) as exc:
             raise StorageError(f"FTPS: ошибка чтения: {exc}") from exc
 
-    def _purge(self, remote_id: str) -> bool:
+    def _do_purge(self, remote_id: str) -> bool:
         try:
             self.connection.delete(remote_id)
             return True

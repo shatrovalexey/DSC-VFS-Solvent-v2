@@ -22,9 +22,10 @@ class StorageDriver(ABC):
     (FTP, IMAP и т.д.): сохранение, получение и удаление бинарных частей.
 
     Соединение устанавливается в `prepare`; при неудаче попытка повторяется
-    до `max_attempts` раз. Перед каждой операцией (`store`, `fetch`, `purge`)
-    вызывается `_ensure_ready`: если `_is_connected` сообщает, что соединение
-    неактуально, драйвер автоматически переподключается через `prepare`.
+    до `max_attempts` раз. Методы `_store`, `_fetch`, `_purge` перед каждой
+    операцией вызывают `_ensure_ready`: если `_is_connected` сообщает, что
+    соединение неактуально, драйвер автоматически переподключается через
+    `prepare`.
     """
 
     def __init__(
@@ -85,30 +86,54 @@ class StorageDriver(ABC):
 
     def store(self, message: bytes) -> str:
         """Сохранить часть файла, вернуть идентификатор в хранилище."""
-        self._ensure_ready()
         return self._store(message)
 
-    @abstractmethod
     def _store(self, message: bytes) -> str:
-        """Сохранить часть файла (соединение уже проверено)."""
+        """Сохранить часть файла.
+
+        Перед операцией проверяется актуальность соединения; при
+        необходимости выполняется переподключение.
+        """
+        self._ensure_ready()
+        return self._do_store(message)
+
+    @abstractmethod
+    def _do_store(self, message: bytes) -> str:
+        """Низкоуровневое сохранение части файла (соединение уже проверено)."""
 
     def fetch(self, remote_id: str) -> bytes:
         """Получить часть файла по идентификатору."""
-        self._ensure_ready()
         return self._fetch(remote_id)
 
-    @abstractmethod
     def _fetch(self, remote_id: str) -> bytes:
-        """Получить часть файла (соединение уже проверено)."""
+        """Получить часть файла.
+
+        Перед операцией проверяется актуальность соединения; при
+        необходимости выполняется переподключение.
+        """
+        self._ensure_ready()
+        return self._do_fetch(remote_id)
+
+    @abstractmethod
+    def _do_fetch(self, remote_id: str) -> bytes:
+        """Низкоуровневое получение части файла (соединение уже проверено)."""
 
     def purge(self, remote_id: str) -> bool:
         """Удалить часть файла."""
-        self._ensure_ready()
         return self._purge(remote_id)
 
-    @abstractmethod
     def _purge(self, remote_id: str) -> bool:
-        """Удалить часть файла (соединение уже проверено)."""
+        """Удалить часть файла.
+
+        Перед операцией проверяется актуальность соединения; при
+        необходимости выполняется переподключение.
+        """
+        self._ensure_ready()
+        return self._do_purge(remote_id)
+
+    @abstractmethod
+    def _do_purge(self, remote_id: str) -> bool:
+        """Низкоуровневое удаление части файла (соединение уже проверено)."""
 
     @abstractmethod
     def finish(self) -> None:

@@ -38,7 +38,7 @@ class IMAPDriver(StorageDriver):
         except (imaplib.IMAP4.error, OSError):
             return False
 
-    def _store(self, message: bytes) -> str:
+    def _do_store(self, message: bytes) -> str:
         try:
             hex_data = binascii.b2a_hex(message).decode("ascii")
             msg = email.message.Message()
@@ -58,7 +58,7 @@ class IMAPDriver(StorageDriver):
         except (imaplib.IMAP4.error, OSError) as exc:
             raise StorageError(f"IMAP: ошибка сохранения: {exc}") from exc
 
-    def _fetch(self, remote_id: str) -> bytes:
+    def _do_fetch(self, remote_id: str) -> bytes:
         try:
             status, data = self.connection.uid("FETCH", remote_id, "(RFC822)")
             if status != "OK":
@@ -69,7 +69,7 @@ class IMAPDriver(StorageDriver):
         except (imaplib.IMAP4.error, OSError) as exc:
             raise StorageError(f"IMAP: ошибка чтения: {exc}") from exc
 
-    def _purge(self, remote_id: str) -> bool:
+    def _do_purge(self, remote_id: str) -> bool:
         try:
             self.connection.uid("STORE", remote_id, "+FLAGS", r"(\Deleted)")
             status, _ = self.connection.expunge()
