@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.git.old
+.git.new
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Тесты и покрытие
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Инструменты
+.ruff_cache/
+.mypy_cache/
+
+# Node/Gulp
+node_modules/
+web/dist/
+
+# Данные приложения
+data/
+*.db
+*.db-journal
+*.gz
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# ОС
+.DS_Store
+Thumbs.db

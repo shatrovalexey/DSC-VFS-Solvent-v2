@@ -1,0 +1,29 @@
+{
+  "name": "dsc-vfs-solvent-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Сборка веб-интерфейса dsc-vfs-solvent (Gulp + TypeScript + esbuild)",
+  "scripts": {
+    "build": "gulp build",
+    "watch": "gulp watch",
+    "clean": "gulp clean",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "bootstrap": "^5.3.3",
+    "vue": "^3.4.29"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.19",
+    "cssnano": "^7.0.4",
+    "del": "^7.1.0",
+    "esbuild": "^0.21.5",
+    "gulp": "^5.0.0",
+    "gulp-postcss": "^10.0.0",
+    "gulp-sourcemaps": "^3.0.0",
+    "gulp-terser": "^2.1.0",
+    "gulp-typescript": "^6.0.2",
+    "postcss": "^8.4.39",
+    "typescript": "^5.5.3"
+  }
+}

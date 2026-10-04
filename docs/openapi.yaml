@@ -1,0 +1,884 @@
+openapi: 3.1.0
+info:
+  title: dsc-vfs-solvent API
+  description: |
+    REST API клиента децентрализованного хранения данных.
+    Поддерживаются хранилища FTP, FTPS, SFTP и IMAP.
+
+    Авторизация: Bearer-токен, получаемый через `/api/auth/login`
+    или `/api/auth/register`. Все эндпоинты, кроме `/api/auth/*`,
+    требуют заголовок `Authorization: Bearer <token>`.
+  version: 2.2.0
+servers:
+  - url: http://127.0.0.1:8000
+    description: Локальный сервер по умолчанию
+tags:
+  - name: auth
+    description: Регистрация, вход и управление токенами
+  - name: accounts
+    description: Учётные записи внешних хранилищ
+  - name: files
+    description: Файлы в децентрализованном хранилище
+  - name: admin
+    description: Администрирование (баны пользователей)
+paths:
+  /api/auth/register:
+    post:
+      tags: [auth]
+      summary: Регистрация пользователя по e-mail
+      description: |
+        Отправляет одноразовый код подтверждения на указанный e-mail.
+        Токен выдаётся только после подтверждения (/api/auth/verify).
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '200':
+          description: Пользователь создан, ожидает подтверждения e-mail (token пустой)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Некорректные данные (не e-mail, короткий пароль, дубликат)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/verify:
+    post:
+      tags: [auth]
+      summary: Подтвердить e-mail кодом из письма
+      operationId: verifyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+      responses:
+        '200':
+          description: E-mail подтверждён, выдан токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Неверный или истёкший код
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/change-password:
+    post:
+      tags: [auth]
+      summary: Сменить пароль
+      operationId: changePassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Пароль изменён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Неверный текущий пароль или короткий новый
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/forgot-password:
+    post:
+      tags: [auth]
+      summary: Восстановление пароля
+      description: |
+        Сервер генерирует случайный пароль и отправляет его на e-mail.
+        При следующем входе пользователь обязан сменить пароль.
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        '200':
+          description: Запрос принят (если e-mail зарегистрирован — пароль отправлен)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+  /api/auth/delete-account:
+    post:
+      tags: [auth]
+      summary: Удалить аккаунт со всеми файлами
+      description: |
+        Требует подтверждения паролем. Все файлы уничтожаются во внешних
+        хранилищах, аккаунт и связанные данные удаляются.
+      operationId: deleteMyAccount
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
+      responses:
+        '200':
+          description: Аккаунт удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Неверный пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Вход, получение Bearer-токена
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешный вход, возвращается токен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Неверное имя пользователя или пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/logout:
+    post:
+      tags: [auth]
+      summary: Выход, отзыв текущего токена
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Токен отозван
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Текущий пользователь
+      operationId: me
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Информация о текущем пользователе
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserOut'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/auth/public-key:
+    get:
+      tags: [auth]
+      summary: Открытый RSA-ключ сервера
+      description: Используется клиентом для шифрования ключа пользователя (X-VFS-Key)
+      operationId: publicKey
+      responses:
+        '200':
+          description: Открытый ключ сервера
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  public_key:
+                    type: string
+  /api/auth/key:
+    post:
+      tags: [auth]
+      summary: Передать зашифрованный ключ пользователя
+      description: |
+        Ключ пользователя шифруется открытым ключом сервера (RSA-OAEP)
+        и передаётся в заголовке X-VFS-Key. Сервер расшифровывает и
+        кэширует его в памяти (не сохраняет в БД).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: X-VFS-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ключ принят
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Ошибка расшифровки ключа
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/admin/users:
+    get:
+      tags: [admin]
+      summary: Список пользователей (только администратор)
+      description: Поиск по имени через параметр q
+      operationId: adminListUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Поиск по имени пользователя
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список пользователей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserOut'
+        '403':
+          description: Требуются права администратора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/admin/users/{user_id}/ban:
+    post:
+      tags: [admin]
+      summary: Забанить пользователя (только администратор)
+      operationId: adminBanUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Пользователь забанен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Требуются права администратора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/admin/users/{user_id}/unban:
+    post:
+      tags: [admin]
+      summary: Разбанить пользователя (только администратор)
+      operationId: adminUnbanUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Пользователь разбанен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '403':
+          description: Требуются права администратора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/accounts:
+    get:
+      tags: [accounts]
+      summary: Список аккаунтов текущего пользователя
+      operationId: listAccounts
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список аккаунтов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AccountOut'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [accounts]
+      summary: Добавить аккаунт хранилища
+      operationId: createAccount
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountCreate'
+      responses:
+        '200':
+          description: Аккаунт создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountOut'
+        '400':
+          description: Некорректные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/accounts/{account_id}:
+    parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      tags: [accounts]
+      summary: Обновить аккаунт
+      operationId: updateAccount
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountUpdate'
+      responses:
+        '200':
+          description: Аккаунт обновлён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountOut'
+        '404':
+          description: Аккаунт не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [accounts]
+      summary: Удалить аккаунт
+      description: |
+        Если в аккаунте есть части файлов, они переносятся в другие
+        включённые аккаунты пользователя. Если других аккаунтов нет —
+        возвращается ошибка 400.
+      operationId: deleteAccount
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Аккаунт удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Нет других аккаунтов для переноса частей
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Аккаунт не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/files:
+    get:
+      tags: [files]
+      summary: Список файлов текущего пользователя
+      operationId: listFiles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Список файлов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileOut'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    post:
+      tags: [files]
+      summary: Загрузить файл (multipart/form-data)
+      operationId: uploadFile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Файл сохранён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileOut'
+        '400':
+          description: Нет доступных аккаунтов хранилищ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/files/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags: [files]
+      summary: Информация о файле
+      operationId: getFile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Информация о файле
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileOut'
+        '404':
+          description: Файл не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      tags: [files]
+      summary: Удалить файл
+      operationId: deleteFile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Файл удалён
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: Ошибка удаления
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Файл не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/files/{file_id}/nodes:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags: [files]
+      summary: Части файла
+      operationId: getFileNodes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Список частей
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileNodeOut'
+        '404':
+          description: Файл не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/files/{file_id}/download:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        schema:
+          type: integer
+    get:
+      tags: [files]
+      summary: Скачать файл
+      operationId: downloadFile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Содержимое файла
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Ошибка чтения (контрольная сумма, хранилище)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Файл не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: E-mail пользователя (логин)
+        password:
+          type: string
+          minLength: 6
+          maxLength: 256
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+    UserOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+          description: E-mail пользователя (логин)
+        is_admin:
+          type: boolean
+          default: false
+        banned:
+          type: boolean
+          default: false
+        banned_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Дата/время установки бана (null, если не забанен)
+        banned_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            Дата автоматического снятия бана — первый день месяца,
+            следующего за месяцем установки (даже если до конца месяца
+            оставался 1 день)
+        email_confirmed:
+          type: boolean
+          default: true
+          description: E-mail подтверждён кодом из письма
+        must_change_password:
+          type: boolean
+          default: false
+          description: Требуется сменить пароль при следующем входе
+        created_at:
+          type: string
+          format: date-time
+    VerifyEmailRequest:
+      type: object
+      required: [username, code]
+      properties:
+        username:
+          type: string
+          description: E-mail
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+          description: Код из письма (6 цифр)
+    ChangePasswordRequest:
+      type: object
+      required: [old_password, new_password]
+      properties:
+        old_password:
+          type: string
+        new_password:
+          type: string
+          minLength: 6
+          maxLength: 256
+    ResetPasswordRequest:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+          description: E-mail
+    DeleteAccountRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: Подтверждение удаления паролем
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        token_type:
+          type: string
+          default: bearer
+        user:
+          $ref: '#/components/schemas/UserOut'
+    MessageResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          default: true
+        message:
+          type: string
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+    AccountCreate:
+      type: object
+      required: [driver, host, login]
+      properties:
+        driver:
+          type: string
+          enum: [ftp, ftps, sftp, imap]
+          description: Тип хранилища
+        label:
+          type: string
+          default: ''
+        host:
+          type: string
+        port:
+          type: integer
+          default: 0
+        login:
+          type: string
+        password:
+          type: string
+          default: ''
+          description: Пароль от FTP/FTPS/SFTP/IMAP
+        path:
+          type: string
+          default: ''
+        enabled:
+          type: boolean
+          default: true
+    AccountUpdate:
+      type: object
+      properties:
+        label:
+          type: string
+          nullable: true
+        host:
+          type: string
+          nullable: true
+        port:
+          type: integer
+          nullable: true
+        login:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+        path:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+          nullable: true
+    AccountOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        driver:
+          type: string
+          enum: [ftp, ftps, sftp, imap]
+        label:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+        login:
+          type: string
+        path:
+          type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        nodes_count:
+          type: integer
+          default: 0
+    FileOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        size:
+          type: integer
+        checksum:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    FileNodeOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        file_item_id:
+          type: integer
+        account_id:
+          type: integer
+        remote_id:
+          type: string
+        position:
+          type: integer

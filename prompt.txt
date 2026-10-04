@@ -1,0 +1,279 @@
+# Промпт для воссоздания проекта dsc-vfs-solvent
+
+Ты — опытный Python-разработчик. Воссоздай проект **dsc-vfs-solvent** — клиент для
+децентрализованного хранения данных в публичных сетях и службах. Проект должен
+полностью соответствовать описанию ниже: структуре, поведению, API и интерфейсам.
+Соблюдай стиль кода: докстроки на русском, аннотации типов, line-length 100.
+
+## Общая концепция
+
+1. Файл делится на части (chunks) фиксированного размера (по умолчанию 1 МБ).
+2. Каждая часть шифруется **AES-256-CFB** со случайным паролем.
+3. Части распределяются по доступным учётным записям хранилищ пользователя
+   (FTP / FTPS / SFTP / IMAP) по кругу.
+4. При восстановлении части собираются, расшифровываются и проверяется
+   контрольная сумма (SHA-256).
+5. Шифрование/отправка и скачивание/расшифровка выполняются **многопоточно**
+   (ThreadPoolExecutor, до 16 потоков), в памяти находится ограниченный буфер
+   частей (MAX_PENDING = 32) — файл целиком в оперативную память не загружается.
+
+## Многопользовательность и авторизация
+
+* Несколько пользователей, логин — **e-mail** (регистрация с подтверждением
+  одноразовым кодом из письма; без подтверждения вход невозможен).
+* Пароли хранятся как HMAC-метки: соль + дайджест (PBKDF2/HMAC-SHA256), сам
+  пароль не хранится.
+* Доступ по **Bearer-токенам** (срок жизни 30 дней, в БД хранится только
+  SHA-256 хеш токена).
+* **Смена пароля**: пользователь может сменить пароль, зная текущий
+  (`POST /api/auth/change-password`); ключ пользователя перешифровывается
+  новым паролем.
+* **Восстановление пароля** (`POST /api/auth/forgot-password`): сервер
+  генерирует случайный пароль и отправляет на e-mail; при следующем входе
+  `must_change_password=True` — интерфейс требует сменить пароль. Ключ
+  пользователя при восстановлении пересоздаётся (пароли аккаунтов нужно
+  ввести заново).
+* **Снятие регистрации** (`POST /api/auth/delete-account`): удаление аккаунта
+  с уничтожением всех файлов (части во внешних хранилищах удаляются через
+  StorageManager.purge, затем запись пользователя и каскадные данные).
+* **Администратор**: первый зарегистрированный пользователь становится
+  администратором. Только администратор может банить/разбанивать
+  пользователей (эндпоинты `/api/admin/users/...`) и просматривать список
+  пользователей с поиском по имени (`GET /api/admin/users?q=...`).
+  Администратор не может забанить другого администратора или самого себя.
+  Забаненный пользователь не может войти и использовать токены. У бана
+  фиксируется дата установки (`banned_at`); бан действует до конца месяца
+  установки и снимается **автоматически** в первый день следующего месяца
+  (даже если до конца месяца оставался 1 день) — при попытке входа,
+  использовании токена или просмотре списка пользователей администратором.
+* Изоляция данных между пользователями на уровне БД (user_id): пользователь
+  видит и управляет только своими файлами и аккаунтами.
+
+## Шифрование данных авторизации аккаунтов
+
+* Пароли FTP/FTPS/SFTP/IMAP-аккаунтов шифруются **ключом пользователя**
+  (AES-256-GCM): `crypto.encrypt_account_password(password, user_key)`.
+* Ключ пользователя (user_key, 256 бит) генерируется клиентом; на сервере
+  хранится **только** `key_cipher` — ключ, обёрнутый производным от пароля
+  ключом (`crypto.wrap_user_key(user_key, password)`).
+* **Ключи передаются на сервер зашифрованными**: клиент шифрует user_key
+  открытым ключом сервера RSA-OAEP (`crypto.rsa_encrypt`) и передаёт в
+  заголовке `X-VFS-Key`. Сервер расшифровывает закрытым ключом, кэширует
+  в памяти (UserKeyStore, TTL 15 минут) и **не сохраняет в БД**.
+* Публичный RSA-ключ сервера: `GET /api/auth/public-key`.
+* При регистрации клиент может передать свой user_key в X-VFS-Key; если
+  ключ не передан, сервер генерирует его сам.
+
+## Структура репозитория
+
+```
+pyproject.toml                  # метаданные, зависимости (без entry point CLI)
+README.md                       # документация
+LICENSE                         # Freeware
+.gitignore                      # Python, данные, IDE
+prompt.txt                      # этот файл
+run.py                          # запуск сервера (uvicorn, AppSettings)
+docs/
+    openapi.yaml                # OpenAPI 3.1 спецификация REST API
+    postman_collection.json     # коллекция Postman
+tests/
+    conftest.py                 # фикстуры: БД, TestClient, fake-хранилище
+    test_auth.py                # тесты авторизации
+    test_accounts.py            # тесты аккаунтов
+    test_files.py               # тесты файлов и переноса частей
+    test_admin.py               # тесты администрирования (бан, поиск)
+src/dsc_vfs_solvent/
+    __init__.py                 # __version__ = "2.2.0"
+    auth.py                     # регистрация, вход, токены, админ-проверка
+    crypto.py                   # AES-256-CFB/GCM, PBKDF2, HMAC-пароли, RSA-OAEP
+    db.py                       # SQLAlchemy 2.0 (PostgreSQL), фильтрация по user_id, транзакции
+    keyring.py                  # приём/кэш ключей пользователей (RSA, TTL)
+    log.py                      # логирование
+    mailer.py                   # отправка писем: коды подтверждения, восстановление пароля
+    models.py                   # ORM: User, AuthToken, VerificationCode, Account, FileItem, FileNode
+    settings.py                 # AppSettings (JSON + env DSC_VFS_CONFIG)
+    py.typed
+    api/
+        __init__.py
+        main.py                 # FastAPI app + lifespan + static web
+        deps.py                 # DI: db, storage manager, CurrentUser
+        routes.py               # эндпоинты
+        schemas.py              # Pydantic-схемы
+    storage/
+        __init__.py             # экспорт драйверов
+        base.py                 # StorageDriver (ABC) + StorageError
+        ftp.py                  # FTPDriver
+        ftps.py                 # FTPSDriver (explicit TLS, ftplib.FTP_TLS)
+        sftp.py                 # SFTPDriver (paramiko)
+        imap.py                 # IMAPDriver
+        manager.py              # StorageManager: store/fetch/purge/migrate
+    web/
+        index.html              # веб-интерфейс (HTML5, семантическая разметка)
+        src/
+            styles.css          # исходник CSS (токены, Grid/Flexbox, clamp(), media)
+            app.ts              # исходник JS (Vue 3 + TypeScript, локальный vue)
+        dist/                   # генерируется esbuild: styles.min.css, app.min.js (+ maps)
+gulpfile.js                     # сборка assets (esbuild): TS→JS, CSS→CSS
+tsconfig.json                   # строгие настройки TypeScript
+package.json                    # dev-зависимости и npm-скрипты (build/watch/clean/typecheck)
+```
+
+## Модели данных (SQLAlchemy 2.0, PostgreSQL)
+
+* **User**: id, username (e-mail, unique), password_hash (salt$hmac),
+  key_cipher (обёрнутый ключ пользователя), is_admin, banned,
+  banned_at (дата установки бана, null если не забанен; автоматическое
+  снятие — первый день следующего месяца), email_confirmed (подтверждение
+  e-mail кодом), must_change_password (требуется смена при входе), created_at.
+  Связи: accounts, files, tokens (cascade delete).
+* **AuthToken**: id, user_id (FK users, CASCADE), token_hash (unique),
+  created_at, expires_at. Связь: user.
+* **VerificationCode**: id, identifier (e-mail), code_hash (SHA-256 одноразового
+  кода), purpose ("verify_email" | "reset_password"), created_at, expires_at.
+* **Account**: id, user_id (FK users), driver ("ftp"|"ftps"|"sftp"|"imap"),
+  label, host, port, login, password_cipher (AES-256-GCM ключом пользователя),
+  path, enabled, created_at. Связи: owner, nodes.
+* **FileItem**: id, user_id (FK users), name, size, checksum (SHA-256),
+  created_at. Связи: owner, nodes (cascade delete).
+* **FileNode**: id, file_item_id (FK, CASCADE), account_id (FK accounts,
+  RESTRICT), remote_id, password (пароль части), position. Связи: file_item,
+  account.
+
+## Хранилища и драйверы
+
+Интерфейс `StorageDriver(ABC)`: `prepare() -> StorageDriver`, `store(bytes) -> str`,
+`fetch(remote_id) -> bytes`, `purge(remote_id) -> bool`, `finish()`.
+Ошибки оборачиваются в `StorageError`.
+
+* **FTP**: ftplib.FTP; STOU для уникальных имён; port 21.
+* **FTPS**: ftplib.FTP_TLS (explicit TLS): login, затем `prot_p()`; STOU; port 21.
+* **SFTP**: paramiko (Transport + SFTPClient.from_transport); уникальные имена
+  `dsc_<hex>.blob`; mkdir/chdir в account.path; port 22.
+* **IMAP**: imaplib.IMAP4_SSL; APPEND в ящик; payload — hex данных; UID как
+  remote_id; port 993.
+* Менеджер выбирает драйвер по `account.driver`.
+
+`StorageManager`:
+* `store_path(path, user_id) -> file_id`, `store_stream(source, name, user_id)`
+  и `store_bytes(data, name, user_id)` — **потоковая** запись: файл читается
+  частями по chunk_size, каждая часть шифруется AES-256-CFB со случайным
+  паролем и распределяется по включённым аккаунтам. Обработка **многопоточная**
+  (ThreadPoolExecutor, до 16 потоков), в памяти не более MAX_PENDING частей.
+* `fetch_to_file(file_id, target, user_id)`, `fetch_path(...)` — **потоковое**
+  чтение: части скачиваются параллельно, расшифровываются и записываются
+  на свои места (os.pwrite по position * chunk_size); контрольная сумма
+  проверяется потоковым чтением собранного файла.
+  **Чтение FileItem и FileNode выполняется в одной транзакции СУБД**
+  (`db.get_file_with_nodes(file_id, user_id)`), чтобы гарантировать
+  согласованность данных при получении файла.
+* `fetch_bytes(...)` — сборка в bytes (для тестов и небольших данных);
+  тоже использует `get_file_with_nodes`.
+* `purge(file_id, user_id)` — удаление частей и записи FileItem.
+* `migrate_account(account_id, user_id) -> moved_count` — перенос всех частей
+  из удаляемого аккаунта в другие включённые аккаунты (повторное шифрование
+  с новым паролем, удаление старой части после успешной записи). Если других
+  аккаунтов нет или перенесено не всё — StorageError, аккаунт не удаляется.
+
+## REST API (FastAPI)
+
+Запуск: `python run.py` или `uvicorn dsc_vfs_solvent.api.main:app`
+(host 127.0.0.1, port 8000 из AppSettings). Статический веб-интерфейс на `/`,
+Swagger на `/docs`.
+
+Эндпоинты (все, кроме auth, требуют `Authorization: Bearer <token>`):
+
+| Метод | Путь | Описание |
+| --- | --- | --- |
+| POST | `/api/auth/register` | Регистрация по e-mail, отправка кода подтверждения |
+| POST | `/api/auth/verify` | Подтверждение e-mail кодом, выдача токена |
+| POST | `/api/auth/login` | Вход, возвращает token + user |
+| POST | `/api/auth/logout` | Отзыв токена, сброс ключа из кэша |
+| POST | `/api/auth/change-password` | Смена пароля (текущий + новый) |
+| POST | `/api/auth/forgot-password` | Восстановление пароля: случайный на e-mail |
+| POST | `/api/auth/delete-account` | Удаление аккаунта с уничтожением файлов |
+| GET | `/api/auth/me` | Текущий пользователь |
+| GET | `/api/auth/public-key` | Открытый RSA-ключ сервера |
+| POST | `/api/auth/key` | Передать ключ (X-VFS-Key) |
+| GET | `/api/admin/users?q=` | Список пользователей с поиском по имени (админ) |
+| POST | `/api/admin/users/{id}/ban` | Забанить (админ) |
+| POST | `/api/admin/users/{id}/unban` | Разбанить (админ) |
+| GET | `/api/accounts` | Список аккаунтов (с nodes_count) |
+| POST | `/api/accounts` | Добавить аккаунт |
+| PATCH | `/api/accounts/{id}` | Обновить аккаунт |
+| DELETE | `/api/accounts/{id}` | Удалить аккаунт; части переносятся (migrate_account) |
+| POST | `/api/files` | Загрузить файл (multipart) — потоково, без загрузки в RAM |
+| GET | `/api/files` | Список файлов |
+| GET | `/api/files/{id}` | Информация о файле |
+| GET | `/api/files/{id}/nodes` | Части файла |
+| GET | `/api/files/{id}/download` | Скачать файл (StreamingResponse) |
+| DELETE | `/api/files/{id}` | Удалить файл |
+
+`AccountOut` дополнительно содержит `nodes_count` (количество частей в аккаунте).
+Pydantic-схемы: RegisterRequest (username, password >= 6), LoginRequest,
+UserOut, AuthResponse (token, token_type="bearer", user), MessageResponse (ok,
+message), AccountCreate, AccountUpdate, AccountOut, FileOut, FileNodeOut.
+
+## Веб-интерфейс (web/index.html + src/app.ts + src/styles.css)
+
+Одностраничный интерфейс на **Vue 3 + TypeScript** (Vue — локальный пакет,
+собирается esbuild), семантический HTML5, тёмная адаптивная тема. Исходники
+лежат в `web/src/`, собираются **esbuild** (через gulpfile.js) в `web/dist/`
+(`styles.min.css`, `app.min.js`):
+* **index.html** — семантическая разметка (header/main/section/form), скрытие
+  блоков через `v-if`/`v-cloak`, подключение собранных `/static/dist/...`.
+* **styles.css** — современный CSS: кастомные свойства (дизайн-токены),
+  Flexbox/Grid, `clamp()` для типографики, медиазапросы (мобильная вёрстка),
+  `prefers-reduced-motion`, скелетон-спиннер, тосты.
+* **app.ts** — Vue-приложение на TypeScript: интерфейсы API (AuthUser,
+  FileItem, AccountItem, AdminUser), методы API, WebCrypto (RSA-OAEP)
+  для передачи ключа пользователя, работа с файлами/аккаунтами/админкой.
+  Форматирование размера — метод `formatSize` (доступен в шаблоне Vue).
+* Панель входа/регистрации; токен и ключ пользователя в localStorage.
+* Список файлов: ID, имя, размер, дата, кнопки скачать/удалить.
+* Форма добавления аккаунта (driver FTP/FTPS/SFTP/IMAP, host, port, login,
+  password, path) и таблица аккаунтов: ID, драйвер, хост, логин, **Частей**,
+  статус, кнопка удаления.
+* **Удаление аккаунта**:
+  * Если в аккаунте есть части и есть другие включённые аккаунты — диалог
+    подтверждения «части будут перенесены».
+  * Если аккаунт единственный с файлами — предупреждение, что файлы станут
+    недоступны (скачивание ZIP-архива аккаунта не предусмотрено).
+  * Пустой аккаунт — простое подтверждение.
+* **Администрирование** (видно только администратору): секция со списком
+  пользователей, полем поиска по имени (`GET /api/admin/users?q=...`) и
+  кнопками «Забанить»/«Разбанить» (`POST /api/admin/users/{id}/ban|unban`).
+  Кнопка «Забанить» недоступна для других администраторов и самого себя.
+
+## Конфигурация (settings.py)
+
+AppSettings (pydantic): подключение к PostgreSQL отдельными полями
+db_host=127.0.0.1, db_port=5432, db_user=postgres, db_password, db_name;
+DSN собирается методом database_url(). data_dir=data, chunk_size=1 МБ
+(мин. 64 КБ), api_host=127.0.0.1, api_port=8000,
+rsa_private_pem/rsa_public_pem (RSA-пара сервера для передачи ключей
+пользователей, генерируется при первом запуске), log_level=INFO,
+config_file=config/settings.json. Загрузка из JSON, если файл существует;
+путь можно задать env `DSC_VFS_CONFIG`. Таблицы и индексы создаются
+автоматически при первом запуске (Base.metadata.create_all).
+
+## Криптография (crypto.py)
+
+* `derive_key(password, salt)` — PBKDF2-HMAC-SHA256, 200 000 итераций, 32 байта.
+* `encrypt_cfb/decrypt_cfb` — AES-256-CFB: salt|iv|ciphertext (для частей).
+* `encrypt_gcm/decrypt_gcm` — AES-256-GCM: salt|nonce|tag|ciphertext (для секретов).
+* `new_password()` — случайный hex-пароль для части.
+* `hash_password/verify_password` — соль + HMAC-SHA256 (для паролей пользователей).
+* `generate_user_key()` — ключ пользователя (256 бит, hex).
+* `wrap_user_key/unwrap_user_key` — обёртка ключа пользователя паролем (KEK).
+* `encrypt_account_password/decrypt_account_password` — шифрование паролей
+  аккаунтов хранилищ ключом пользователя.
+* `generate_rsa_keypair/rsa_encrypt/rsa_decrypt` — RSA-2048/OAEP для передачи
+  ключей пользователей на сервер.
+
+## Зависимости (pyproject.toml)
+
+Python >= 3.11. Основные: fastapi>=0.110, uvicorn[standard]>=0.29, pydantic>=2.6,
+sqlalchemy>=2.0, psycopg[binary]>=3.1, pycryptodome>=3.20, paramiko>=3.4,
+python-multipart>=0.0.9.
+Dev: ruff, pytest, httpx. Entry point CLI отсутствует (только веб-интерфейс).
+Версия проекта: 2.2.0.

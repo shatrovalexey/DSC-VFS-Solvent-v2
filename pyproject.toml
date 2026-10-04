@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dsc-vfs-solvent"
+version = "2.2.0"
+description = "Клиент для децентрализованного хранения данных: многопользовательный RESTful-сервер + веб-интерфейс"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Freeware" }
+authors = [{ name = "Шатров Алексей Сергеевич", email = "mail@ashatrov.ru" }]
+keywords = ["decentralized", "storage", "ftp", "imap", "aes", "fastapi"]
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.6",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.1",
+    "pycryptodome>=3.20",
+    "paramiko>=3.4",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4",
+    "pytest>=8.0",
+    "httpx>=0.27",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dsc_vfs_solvent = ["py.typed", "web/*.html", "web/dist/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,272 @@
+{
+  "info": {
+    "_postman_id": "dsc-vfs-solvent-collection",
+    "name": "dsc-vfs-solvent API",
+    "description": "Коллекция запросов для REST API dsc-vfs-solvent.\n\nПеременные коллекции:\n- baseUrl: базовый URL (по умолчанию http://127.0.0.1:8000)\n- token: заполняется автоматически после логина/регистрации\n- username / password: тестовый пользователь\n- accountId: заполняется автоматически после создания аккаунта\n- fileId: заполняется автоматически после загрузки файла",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8000" },
+    { "key": "token", "value": "" },
+    { "key": "username", "value": "alice" },
+    { "key": "password", "value": "secret123" },
+    { "key": "accountId", "value": "" },
+    { "key": "fileId", "value": "" },
+    { "key": "userId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Регистрация",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('token', json.token);",
+                  "pm.collectionVariables.set('userId', String(json.user.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          }
+        },
+        {
+          "name": "Вход",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('token', json.token);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Текущий пользователь",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
+          }
+        },
+        {
+          "name": "Выход",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "auth", "logout"] }
+          }
+        },
+        {
+          "name": "Открытый ключ сервера",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/auth/public-key", "host": ["{{baseUrl}}"], "path": ["api", "auth", "public-key"] }
+          }
+        },
+        {
+          "name": "Передать ключ (X-VFS-Key)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-VFS-Key", "value": "<зашифрованный RSA-OAEP ключ>", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/key", "host": ["{{baseUrl}}"], "path": ["api", "auth", "key"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Список пользователей",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"] }
+          }
+        },
+        {
+          "name": "Забанить пользователя",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}/ban", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}", "ban"] }
+          }
+        },
+        {
+          "name": "Разбанить пользователя",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}/unban", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}", "unban"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "Список аккаунтов",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/accounts", "host": ["{{baseUrl}}"], "path": ["api", "accounts"] }
+          }
+        },
+        {
+          "name": "Добавить аккаунт",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('accountId', String(json.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"driver\": \"ftp\",\n  \"label\": \"Тестовый FTP\",\n  \"host\": \"ftp.example.com\",\n  \"port\": 21,\n  \"login\": \"user\",\n  \"password\": \"secret\",\n  \"path\": \"/dsc\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/accounts", "host": ["{{baseUrl}}"], "path": ["api", "accounts"] }
+          }
+        },
+        {
+          "name": "Обновить аккаунт",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Обновлённая метка\",\n  \"enabled\": true\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/accounts/{{accountId}}", "host": ["{{baseUrl}}"], "path": ["api", "accounts", "{{accountId}}"] }
+          }
+        },
+        {
+          "name": "Удалить аккаунт",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/accounts/{{accountId}}", "host": ["{{baseUrl}}"], "path": ["api", "accounts", "{{accountId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Files",
+      "item": [
+        {
+          "name": "Загрузить файл",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('fileId', String(json.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "/path/to/file.txt" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/api/files", "host": ["{{baseUrl}}"], "path": ["api", "files"] }
+          }
+        },
+        {
+          "name": "Список файлов",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/files?limit=100&offset=0", "host": ["{{baseUrl}}"], "path": ["api", "files"] }
+          }
+        },
+        {
+          "name": "Информация о файле",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/files/{{fileId}}", "host": ["{{baseUrl}}"], "path": ["api", "files", "{{fileId}}"] }
+          }
+        },
+        {
+          "name": "Части файла",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/files/{{fileId}}/nodes", "host": ["{{baseUrl}}"], "path": ["api", "files", "{{fileId}}", "nodes"] }
+          }
+        },
+        {
+          "name": "Скачать файл",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/files/{{fileId}}/download", "host": ["{{baseUrl}}"], "path": ["api", "files", "{{fileId}}", "download"] }
+          }
+        },
+        {
+          "name": "Удалить файл",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/files/{{fileId}}", "host": ["{{baseUrl}}"], "path": ["api", "files", "{{fileId}}"] }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="dsc-vfs-solvent — децентрализованное хранение данных (FTP/FTPS/SFTP/IMAP)">
+  <title>dsc-vfs-solvent — децентрализованное хранилище</title>
+
+  <!-- Vue 3 собирается в app.min.js (esbuild), CDN не используется -->
+  <!-- Внешние ресурсы (собираются Gulp: npm run build) -->
+  <!-- Bootstrap 5 — локальная копия (без CDN) -->
+  <link rel="stylesheet" href="/static/dist/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/dist/styles.min.css">
+  <script src="/static/dist/app.min.js" defer></script>
+</head>
+<body>
+  <div id="app" v-cloak>
+    <div class="app-container">
+      <!-- Шапка -->
+      <header class="app-header">
+        <div class="app-header__title">
+          <span class="app-header__logo" aria-hidden="true">🧊</span>
+          <div>
+            <h1>dsc-vfs-solvent</h1>
+            <p class="app-header__subtitle">Децентрализованное хранение данных — REST API</p>
+          </div>
+        </div>
+        <div v-if="isAuthed" class="app-header__user">
+          <span class="muted">👤 {{ currentUser.username }}</span>
+          <button class="btn btn--secondary" @click="showChangePassword = true">Сменить пароль</button>
+          <button class="btn btn--danger" @click="showDeleteAccount = true">Удалить аккаунт</button>
+          <button class="btn btn--secondary" @click="logout">Выйти</button>
+        </div>
+      </header>
+
+      <!-- Панель входа -->
+      <section v-if="!isAuthed" class="panel" aria-labelledby="auth-title">
+        <div class="panel__head">
+          <h2 id="auth-title">Вход</h2>
+        </div>
+        <form class="form-row" @submit.prevent="login">
+          <div class="field">
+            <label for="loginUsername">E-mail</label>
+            <input id="loginUsername" v-model.trim="loginUsername" type="email" class="input" autocomplete="username" placeholder="you@example.com">
+          </div>
+          <div class="field">
+            <label for="loginPassword">Пароль</label>
+            <input id="loginPassword" v-model="loginPassword" type="password" class="input" autocomplete="current-password" placeholder="Пароль">
+          </div>
+          <button type="submit" class="btn">Войти</button>
+          <button type="button" class="btn btn--secondary" @click="forgotPassword">Забыли пароль?</button>
+        </form>
+        <hr class="divider">
+        <form class="form-row" @submit.prevent="register">
+          <div class="field">
+            <label for="regUsername">Регистрация: e-mail</label>
+            <input id="regUsername" v-model.trim="regUsername" type="email" class="input" autocomplete="email" placeholder="you@example.com">
+          </div>
+          <div class="field">
+            <label for="regPassword">Пароль</label>
+            <input id="regPassword" v-model="regPassword" type="password" class="input" autocomplete="new-password" placeholder="Пароль (мин. 6 символов)">
+          </div>
+          <button type="submit" class="btn">Зарегистрироваться</button>
+        </form>
+        <!-- Подтверждение кода из письма -->
+        <form v-if="needVerify" class="form-row" @submit.prevent="verifyEmail">
+          <div class="field">
+            <label for="verifyCode">Код из письма</label>
+            <input id="verifyCode" v-model.trim="verifyCode" class="input" inputmode="numeric" maxlength="6" placeholder="6 цифр">
+          </div>
+          <button type="submit" class="btn">Подтвердить e-mail</button>
+        </form>
+      </section>
+
+      <!-- Основная панель -->
+      <main v-if="isAuthed">
+        <!-- Файлы -->
+        <section class="panel" aria-labelledby="files-title">
+          <div class="panel__head">
+            <h2 id="files-title">Файлы</h2>
+            <span v-if="loading" class="spinner" role="status" aria-label="Загрузка"></span>
+          </div>
+          <div class="dropzone-wrap">
+            <form class="form-row upload-form" @submit.prevent="uploadForm">
+              <input
+                ref="fileInputForm"
+                type="file"
+                class="input input--file"
+                aria-label="Выбрать файл"
+              >
+              <button type="submit" class="btn" :disabled="uploading">
+                {{ uploading ? 'Загрузка…' : 'Загрузить' }}
+              </button>
+            </form>
+            <div
+              class="dropzone"
+              :class="{ 'dropzone--active': dragActive }"
+              role="button"
+              title="Перетащите файл или нажмите, чтобы выбрать"
+              @dragover.prevent="onDragOver"
+              @dragleave.prevent="onDragLeave"
+              @drop.prevent="onDrop"
+              @click="$refs.fileInput.click()"
+            >
+              <input
+                ref="fileInput"
+                type="file"
+                class="dropzone__input"
+                @change="onFileInputChange"
+              >
+              <span v-if="!dragActive">
+                {{ uploading ? 'Загрузка…' : 'Перетащите файл сюда или нажмите, чтобы выбрать' }}
+              </span>
+              <span v-else>Отпустите файл, чтобы загрузить</span>
+            </div>
+            <button type="button" class="btn btn--secondary" @click="loadFiles">Обновить</button>
+          </div>
+          <div v-if="files.length" class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Имя</th>
+                  <th>Размер</th>
+                  <th>Дата</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="f in files" :key="f.id">
+                  <td>{{ f.id }}</td>
+                  <td>{{ f.name }}</td>
+                  <td>{{ formatSize(f.size) }}</td>
+                  <td>{{ new Date(f.created_at).toLocaleString() }}</td>
+                  <td>
+                    <div class="cell-actions">
+                      <button class="btn btn--secondary btn--sm" @click="download(f.id)" title="Скачать">⬇</button>
+                      <button class="btn btn--danger btn--sm" @click="removeFile(f.id)" title="Удалить">✕</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="empty-state">Файлов пока нет.</div>
+        </section>
+
+        <!-- Аккаунты хранилищ -->
+        <section class="panel" aria-labelledby="accounts-title">
+          <div class="panel__head">
+            <h2 id="accounts-title">Аккаунты хранилищ</h2>
+          </div>
+          <form class="form-row" @submit.prevent="addAccount">
+            <select v-model="accDriver" class="select" aria-label="Тип хранилища">
+              <option value="ftp">FTP</option>
+              <option value="ftps">FTPS</option>
+              <option value="sftp">SFTP</option>
+              <option value="imap">IMAP</option>
+            </select>
+            <input v-model.trim="accHost" class="input" placeholder="host" aria-label="Хост">
+            <input v-model="accPort" class="input input--port" placeholder="port" aria-label="Порт">
+            <input v-model.trim="accLogin" class="input" placeholder="login" aria-label="Логин">
+            <input v-model="accPass" type="password" class="input" placeholder="password" aria-label="Пароль">
+            <input v-model.trim="accPath" class="input" placeholder="path (опционально)" aria-label="Путь">
+            <button type="submit" class="btn">Добавить</button>
+          </form>
+          <div v-if="accounts.length" class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Драйвер</th>
+                  <th>Хост</th>
+                  <th>Логин</th>
+                  <th>Частей</th>
+                  <th>Статус</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="a in accounts" :key="a.id">
+                  <td>{{ a.id }}</td>
+                  <td>{{ a.driver.toUpperCase() }}</td>
+                  <td>{{ a.host }}</td>
+                  <td>{{ a.login }}</td>
+                  <td>{{ a.nodes_count || 0 }}</td>
+                  <td><span class="badge" :class="a.enabled ? 'badge--ok' : 'badge--off'">{{ a.enabled ? 'вкл' : 'выкл' }}</span></td>
+                  <td>
+                    <div class="cell-actions">
+                      <button class="btn btn--danger btn--sm" @click="removeAccount(a.id)" title="Удалить">✕</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="empty-state">Аккаунтов пока нет.</div>
+        </section>
+
+        <!-- Администрирование -->
+        <section v-if="isAdmin" class="panel" aria-labelledby="admin-title">
+          <div class="panel__head">
+            <h2 id="admin-title">Администрирование</h2>
+          </div>
+          <form class="form-row" @submit.prevent="adminLoadUsers">
+            <input v-model.trim="adminSearch" class="input" placeholder="Поиск по имени…" aria-label="Поиск пользователей">
+            <button type="submit" class="btn">Найти</button>
+            <button type="button" class="btn btn--secondary" @click="adminClearSearch">Сбросить</button>
+          </form>
+          <div v-if="adminUsers.length" class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Имя</th>
+                  <th>Роль</th>
+                  <th>Статус</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="u in adminUsers" :key="u.id">
+                  <td>{{ u.id }}</td>
+                  <td>{{ u.username }}<span v-if="u.id === currentUser.id" class="muted"> (это вы)</span></td>
+                  <td>{{ u.is_admin ? '👑 админ' : 'пользователь' }}</td>
+                  <td><span class="badge" :class="u.banned ? 'badge--off' : 'badge--ok'">{{ u.banned ? ('забанен с ' + formatBanDate(u.banned_at) + ' до ' + formatBanDate(u.banned_until)) : 'активен' }}</span></td>
+                  <td>
+                    <template v-if="!u.is_admin">
+                      <button v-if="u.banned" class="btn btn--secondary btn--sm" @click="adminUnban(u.id)">Разбанить</button>
+                      <button v-else class="btn btn--danger btn--sm" @click="adminBan(u.id)">Забанить</button>
+                    </template>
+                    <span v-else class="muted">—</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-else class="empty-state">Пользователи не найдены.</div>
+        </section>
+      </main>
+
+      <!-- Смена пароля -->
+      <div v-if="showChangePassword" class="modal-overlay" @click.self="showChangePassword = false">
+        <div class="modal">
+          <h3>Смена пароля</h3>
+          <form class="form-col" @submit.prevent="changePassword">
+            <div class="field">
+              <label for="oldPassword">Текущий пароль</label>
+              <input id="oldPassword" v-model="oldPassword" type="password" class="input" autocomplete="current-password">
+            </div>
+            <div class="field">
+              <label for="newPass">Новый пароль</label>
+              <input id="newPass" v-model="newPass" type="password" class="input" autocomplete="new-password" placeholder="Мин. 6 символов">
+            </div>
+            <div class="field">
+              <label for="newPassConfirm">Повторите новый пароль</label>
+              <input id="newPassConfirm" v-model="newPassConfirm" type="password" class="input" autocomplete="new-password">
+            </div>
+            <div class="form-row">
+              <button type="submit" class="btn">Сохранить</button>
+              <button type="button" class="btn btn--secondary" @click="showChangePassword = false">Отмена</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Удаление аккаунта -->
+      <div v-if="showDeleteAccount" class="modal-overlay" @click.self="showDeleteAccount = false">
+        <div class="modal">
+          <h3>Удаление аккаунта</h3>
+          <p class="muted">Все файлы будут уничтожены безвозвратно. Для подтверждения введите пароль.</p>
+          <form class="form-col" @submit.prevent="deleteAccount">
+            <div class="field">
+              <label for="deletePassword">Пароль</label>
+              <input id="deletePassword" v-model="deletePassword" type="password" class="input" autocomplete="current-password">
+            </div>
+            <div class="form-row">
+              <button type="submit" class="btn btn--danger">Удалить навсегда</button>
+              <button type="button" class="btn btn--secondary" @click="showDeleteAccount = false">Отмена</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Тосты -->
+      <div v-if="toastMessage" class="toast" :class="{ 'toast--error': toastError }" role="status">
+        {{ toastMessage }}
+      </div>
+    </div>
+  </div>
+</body>
+</html>

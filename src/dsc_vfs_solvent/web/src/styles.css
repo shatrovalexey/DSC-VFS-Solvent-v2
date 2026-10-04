@@ -1,0 +1,506 @@
+/* ==========================================================================
+   dsc-vfs-solvent — стили веб-интерфейса
+   Кастомные стили поверх Bootstrap 5 (локальный bootstrap.min.css).
+   Bootstrap подключается в index.html ОТДЕЛЬНЫМ <link> перед этим файлом,
+   поэтому правила ниже переопределяют его за счёт каскада.
+   ========================================================================== */
+
+/* -- Дизайн-токены ------------------------------------------------------ */
+:root {
+  color-scheme: dark;
+
+  /* Цвета */
+  --bg: #0f172a;
+  --bg-elevated: #1e293b;
+  --border: #334155;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-contrast: #0f172a;
+  --danger: #f87171;
+  --ok: #4ade80;
+  --warning: #fbbf24;
+
+  /* Типографика */
+  --font-base: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --text-sm: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --text-base: clamp(0.9rem, 0.85rem + 0.25vw, 1rem);
+
+  /* Геометрия */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* Тени */
+  --shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+}
+
+/* -- Сброс -------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-base);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgb(56 189 248 / 0.12), transparent 60%),
+    var(--bg);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0 0 var(--space-2);
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: clamp(1.35rem, 1.1rem + 1.2vw, 1.75rem);
+}
+
+h2 {
+  font-size: clamp(1.05rem, 0.95rem + 0.6vw, 1.3rem);
+}
+
+p {
+  margin: 0 0 var(--space-3);
+}
+
+/* -- Каркас ------------------------------------------------------------- */
+/* Собственный контейнер (не Bootstrap .container): фиксированная ширина
+   с учётом дизайн-токенов, без боковых gutter'ов Bootstrap. */
+.app-container {
+  width: min(100% - 2 * var(--space-6), 1080px);
+  margin-inline: auto;
+  padding-block: var(--space-6);
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.app-header__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.app-header__logo {
+  font-size: 1.6em;
+  line-height: 1;
+}
+
+.app-header__subtitle {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+/* -- Панели ------------------------------------------------------------- */
+.panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  margin-top: var(--space-5);
+  box-shadow: var(--shadow);
+}
+
+.panel + .panel {
+  margin-top: var(--space-5);
+}
+
+.panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/* -- Формы -------------------------------------------------------------- */
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.form-row + .form-row {
+  margin-top: var(--space-3);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.field > label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.input,
+.select {
+  min-width: 0;
+  padding: 9px 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus,
+.select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(56 189 248 / 0.2);
+}
+
+.input[type="file"] {
+  padding: 6px;
+}
+
+/* -- Зона Drag&Drop ------------------------------------------------------ */
+.dropzone-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.upload-form {
+  flex: 0 1 auto;
+  margin: 0;
+}
+
+.input--file {
+  max-width: 260px;
+}
+
+.dropzone {
+  flex: 1 1 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 96px;
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.dropzone:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.dropzone--active {
+  border-color: var(--accent);
+  background: rgb(56 189 248 / 0.08);
+  color: var(--text);
+}
+
+.dropzone__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.input--port {
+  width: 90px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 9px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+
+.btn:hover {
+  filter: brightness(1.08);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn--secondary {
+  color: var(--text);
+  background: var(--border);
+}
+
+.btn--danger {
+  background: var(--danger);
+}
+
+.btn--ghost {
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.btn--sm {
+  padding: 5px 10px;
+  font-size: var(--text-sm);
+}
+
+/* -- Таблицы ------------------------------------------------------------ */
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 560px;
+}
+
+.table th,
+.table td {
+  padding: 10px 12px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: var(--text-sm);
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr {
+  transition: background 0.12s ease;
+}
+
+.table tbody tr:hover {
+  background: rgb(56 189 248 / 0.05);
+}
+
+.table .cell-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* -- Бейджи ------------------------------------------------------------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge--ok {
+  background: rgb(74 222 128 / 0.15);
+  color: var(--ok);
+}
+
+.badge--off {
+  background: rgb(148 163 184 / 0.15);
+  color: var(--text-muted);
+}
+
+.badge--warn {
+  background: rgb(251 191 36 / 0.15);
+  color: var(--warning);
+}
+
+/* -- Тосты -------------------------------------------------------------- */
+.toast {
+  position: fixed;
+  inset-inline-end: var(--space-5);
+  bottom: var(--space-5);
+  z-index: 100;
+  max-width: min(90vw, 360px);
+  padding: var(--space-3) var(--space-4);
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--accent);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  animation: toast-in 0.2s ease;
+}
+
+.toast--error {
+  border-inline-start-color: var(--danger);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* -- Модальные окна ------------------------------------------------------ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgb(2 6 23 / 0.6);
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  width: min(100%, 420px);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  box-shadow: var(--shadow);
+}
+
+.modal h3 {
+  margin-bottom: var(--space-3);
+}
+
+.form-col {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.divider {
+  margin: var(--space-4) 0;
+  border: none;
+  border-top: 1px solid var(--border);
+}
+
+/* -- Служебное ---------------------------------------------------------- */
+[v-cloak] {
+  display: none;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.empty-state {
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* -- Адаптивность ------------------------------------------------------- */
+@media (max-width: 720px) {
+  .app-container {
+    width: min(100% - 2 * var(--space-4), 1080px);
+    padding-block: var(--space-4);
+  }
+
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .form-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-row .input,
+  .form-row .select,
+  .form-row .btn {
+    width: 100%;
+  }
+
+  .panel__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .toast {
+    inset-inline: var(--space-4);
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

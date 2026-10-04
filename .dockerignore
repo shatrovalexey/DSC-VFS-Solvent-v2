@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Тесты и покрытие
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Инструменты
+.ruff_cache/
+.mypy_cache/
+
+# Node/Gulp
+node_modules/
+src/dsc_vfs_solvent/web/dist/
+
+# Данные приложения
+data/
+*.db
+*.db-journal
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# IDE/ОС
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
